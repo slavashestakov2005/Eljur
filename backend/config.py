@@ -4,3 +4,5 @@ class Config:
     EXAMPLES_FOLDER = 'backend/examples'
 
     TEMPLATES_AUTO_RELOAD = True
+
+    WRITER = None

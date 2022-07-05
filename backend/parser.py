@@ -12,7 +12,9 @@ def parser(func):
                 if year not in data:
                     data[year] = []
             else:
-                data[year].append(func(cells, *args))
+                value = list(func(cells, *args))
+                value = ['' if _ is None else _ for _ in value]
+                data[year].append(value)
         return data
     return new_func
 
@@ -24,38 +26,66 @@ def get_rows(text: str):
 
 
 def parse_mark(elem):
-    child = list(elem.children)
-    if len(child) == 0:
-        return ''
-    child = list(child[0].children)
-    return child[0].string + list(child[1].children)[0].string
-
-
-def parse_mark2(elem):
     child = list(list(elem.children)[0].children)
     if len(child) == 0:
         return ''
     return child[0].string + list(child[1].children)[0].string
 
 
+def parse_teacher(elem):
+    child = list(list(elem.children)[0].children)
+    if len(child) == 0:
+        return ''
+    return child[0].string
+
+
+def parse_editable(elem):
+    return list(elem.children)[0].string
+
+
 @parser
-def parse_intellectual_events(cells: list, is_research=False):
-    subject = list(cells[0].children)[0].string
-    teacher = list(cells[1].children)[0].string
-    if not is_research:
-        etaps = [parse_mark(cells[i + 2]) for i in range(5)]
-    else:
-        etaps = [parse_mark2(cells[i + 2]) for i in range(5)]
+def parse_intellectual(cells: list):
+    subject = parse_editable(cells[0])
+    teacher = parse_teacher(cells[1])
+    etaps = [parse_mark(cells[i + 2]) for i in range(5)]
     return subject, teacher, etaps
 
 
 @parser
-def parse_events(cells: list):
-    name = list(cells[0].children)[0].string
-    date = list(cells[1].children)[0].string
-    teacher = list(cells[2].children)[0].string
+def parse_events_in(cells: list):
+    name = parse_editable(cells[0])
+    date = parse_editable(cells[1])
+    teacher = parse_teacher(cells[2])
     mark = parse_mark(cells[3])
     return name, date, teacher, mark
+
+
+@parser
+def parse_events_out(cells: list):
+    name = parse_editable(cells[0])
+    date = parse_editable(cells[1])
+    teacher = parse_teacher(cells[2])
+    tp = parse_editable(cells[3])
+    mark = parse_mark(cells[4])
+    return name, date, teacher, tp, mark
+
+
+@parser
+def parse_sport_out(cells: list):
+    subject = parse_editable(cells[0])
+    teacher = parse_teacher(cells[1])
+    name = parse_editable(cells[2])
+    mark = parse_mark(cells[3])
+    return subject, teacher, name, mark
+
+
+@parser
+def parse_creativity_out(cells: list):
+    tp = parse_editable(cells[0])
+    teacher = parse_teacher(cells[1])
+    name = parse_editable(cells[2])
+    mark = parse_mark(cells[3])
+    return tp, teacher, name, mark
 
 
 @parser
@@ -65,5 +95,57 @@ def parse_results(cells: list):
     return time, mark
 
 
+@parser
+def parse_elective(cells: list):
+    name = parse_editable(cells[0])
+    teacher = parse_teacher(cells[1])
+    report = parse_mark(cells[2])
+    protection = parse_mark(cells[3])
+    return name, teacher, report, protection
+
+
+@parser
+def parse_olympiad(cells: list):
+    name = parse_editable(cells[0])
+    teacher = parse_teacher(cells[1])
+    place = parse_mark(cells[2])
+    return name, teacher, place
+
+
+@parser
+def parse_education_out(cells: list):
+    name = parse_editable(cells[0])
+    place = parse_editable(cells[1])
+    teacher = parse_teacher(cells[2])
+    work = parse_editable(cells[3])
+    exists = parse_mark(cells[4])
+    protection = parse_mark(cells[5])
+    return name, place, teacher, work, exists, protection
+
+
+@parser
+def parse_education_in(cells: list):
+    name = parse_editable(cells[0])
+    teacher = parse_teacher(cells[1])
+    work = parse_editable(cells[2])
+    exists = parse_mark(cells[3])
+    protection = parse_mark(cells[4])
+    return name, teacher, work, exists, protection
+
+
 def writable(data: dict):
     return '\n'.join('\t' + str(_) + ':\n' + '\n'.join(str(__) for __ in data[_]) for _ in data) + '\n\n'
+
+
+def write(cls: str, fio: str, data: dict, func):
+    new_data = []
+    for year in data:
+        for row in data[year]:
+            new_row = [cls, fio, year]
+            for x in row:
+                if type(x) == list:
+                    new_row.extend(x)
+                else:
+                    new_row.append(x)
+            new_data.append(new_row)
+    func(new_data)
