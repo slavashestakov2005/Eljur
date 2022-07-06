@@ -1,4 +1,5 @@
 from bs4 import BeautifulSoup
+from .config import Config
 
 
 def parser(func):
@@ -137,7 +138,7 @@ def writable(data: dict):
     return '\n'.join('\t' + str(_) + ':\n' + '\n'.join(str(__) for __ in data[_]) for _ in data) + '\n\n'
 
 
-def write(cls: str, fio: str, data: dict, func):
+def write(cls: str, fio: str, data: dict, name: str):
     new_data = []
     for year in data:
         for row in data[year]:
@@ -148,4 +149,4 @@ def write(cls: str, fio: str, data: dict, func):
                 else:
                     new_row.append(x)
             new_data.append(new_row)
-    func(new_data)
+    Config.WRITER.add(name, new_data)

@@ -1,3 +1,10 @@
+let query_send = 0, query_get = 0, query_error = 0, errors = [], classes_need_parse = 0, server = 'https://slavashestakov2005.pythonanywhere.com/';
+
+
+function sleep(ms) {
+	return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 function toHtml(data){
 	let div = document.createElement('div');
 	div.innerHTML = data;
@@ -31,36 +38,49 @@ function toCode(name, href) {
 }
 
 
-function parseStudent(href) {
+function parseStudent(href, step = 0) {
+	if (step === 10){
+		errors.push(href);
+		return;
+	}
+	++query_send;
 	$.ajax({
 		url: href + "?mode=print",
 		dataType: "html"
 	}).done(function (msg) {
 		let div = toHtml(msg);
+		if (div.getElementsByClassName("page-empty").length){
+			++query_get;
+			return;
+		}
 		let title = div.getElementsByClassName("page-title")[0].textContent.split(' ');
 		let tables = div.getElementsByClassName("ej-accordion");
 		let data = dataForSend();
 		data['cls'] = title[1];
 		data['fio'] = title[title.length - 3] + " " + title[title.length - 2] + " " + title[title.length - 1];
-		for (let table of tables){
+		for (let table of tables) {
 			let name = table.children[0].children[0].children[0].innerHTML;
-			let info = table.children[1].children[0].children[0];
-			info = info.children[1];
-			let key = toCode(name, href);
-			data[key] = info.innerHTML;
+			let info = table.children[1].children[0].children[0].children[1].innerHTML;
+			data[toCode(name, href)] = info;
 		}
 
 		$.ajax({
-			url: "http://localhost:8080/parse",
+			url: server + "parse",
 			type: 'POST',
 			data: data,
 			dataType: "json"
-		}).done(function (msg) {});
+		}).done(function (msg) {
+			++query_get;
+		});
+	}).error(function (msg) {
+		++query_get;
+		++query_error;
+		parseStudent(href, step + 1);
 	});
 }
 
 function parseClass(href){
-	console.log(href);
+	++query_send;
 	$.ajax({
 		url: href,
 		dataType: "html"
@@ -71,6 +91,33 @@ function parseClass(href){
 				parseStudent(newHref);
 			}
 		}
+		++query_get;
+	});
+}
+
+function parseClassDelay(href){
+	++classes_need_parse;
+	if (query_send - query_get < 5){
+		parseClass(href);
+		--classes_need_parse;
+	}
+	else sleep(1000).then(() => { parseClassDelay(href); --classes_need_parse; });
+}
+
+function parseClassList(){
+	++query_send;
+	$.ajax({
+		url: "https://univers.eljur.ru/journal-portfolio-action",
+		dataType: "html"
+	}).done(function (msg) {
+		let a = toHtml(msg).getElementsByClassName("choose_classes_single")[0].getElementsByTagName("a");
+		for (let element of a) {
+			parseClassDelay(element.href);
+		}
+		++query_get;
+	}).error(function (msg) {
+		++query_get;
+		alert("Нужно зайти в журнал");
 	});
 }
 
@@ -82,33 +129,54 @@ window.onload = function() {
 	button.setAttribute("type", "button");
 	button.setAttribute("value", "Печать портфолио");
 	button.setAttribute("name", "print-portfolio");
+	let p = document.createElement("p");
+	p.setAttribute("id", "tag_p_for_info_from_eljur_extension");
 	button.onclick = function(){
-		let xhr = new XMLHttpRequest();
-		xhr.open('GET', "https://univers.eljur.ru/journal-portfolio-action", true);
-		xhr.onload = function () {
-			let a = toHtml(xhr.response).getElementsByClassName("choose_classes_single")[0].getElementsByTagName("a");
-			let hrefs = [];
-			for (let element of a) hrefs.push(element.href);
-			console.log(0);
-			parseClass(hrefs[0]);
-			console.log(1);
-			parseClass(hrefs[1]);
-			console.log(2);
-			parseClass(hrefs[2]);
-			console.log(3);
-			parseClass(hrefs[3]);
-			console.log(4);
-			parseClass(hrefs[4]);
-			console.log(5);
-			parseClass(hrefs[5]);
-			console.log(6);
-			parseClass(hrefs[6]);
-			console.log(7);
-			parseClass(hrefs[7]);
-			console.log(8);
-			parseClass(hrefs[8]);
-		};
-		xhr.send(null);
+		$.ajax({
+			url: server + "start",
+			type: 'POST',
+			dataType: "json"
+		}).done(function (msg) {
+			parseClassList();
+		});
+
+		let timerId = setInterval(function() {
+			let text = "Отправлено: " + query_send + "<br>" +
+				"Получено: " + query_get + "<br>" +
+				"Из них повторных: " + query_error + "<br>" +
+				"Осталось классов: " + classes_need_parse;
+			if (errors.length) text += '<br>Ошибки:<br>' + errors;
+			document.getElementById('tag_p_for_info_from_eljur_extension').innerHTML = text;
+			if (query_send - query_get === 0 && classes_need_parse === 0){
+				clearInterval(timerId);
+
+				let request = new XMLHttpRequest(), fileName = "log.xlsx";
+				request.open('POST', server + "end", true);
+				request.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded; charset=UTF-8');
+				request.responseType = 'blob';
+
+				request.onload = function(e) {
+					if (this.status === 200) {
+						let blob = this.response;
+						if(window.navigator.msSaveOrOpenBlob) {
+							window.navigator.msSaveBlob(blob, fileName);
+						}
+						else{
+							let downloadLink = window.document.createElement('a');
+							let contentTypeHeader = request.getResponseHeader("Content-Type");
+							downloadLink.href = window.URL.createObjectURL(new Blob([blob], { type: contentTypeHeader }));
+							downloadLink.download = fileName;
+							document.body.appendChild(downloadLink);
+							downloadLink.click();
+							document.body.removeChild(downloadLink);
+						}
+					}
+				};
+				request.send();
+			}
+		}, 1000);
+
 	};
 	footer.children[0].appendChild(button);
+	footer.children[0].appendChild(p);
 };
