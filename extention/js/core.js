@@ -1,4 +1,5 @@
-let query_send = 0, query_get = 0, query_error = 0, errors = [], classes_need_parse = 0, server = 'https://slavashestakov2005.pythonanywhere.com/';
+let query_send = 0, query_get = 0, query_error = 0, errors = [], classes_need_parse = 0, server = 'http://localhost:8080/';
+let api_key = '';
 
 
 function sleep(ms) {
@@ -12,7 +13,7 @@ function toHtml(data){
 }
 
 function dataForSend(){
-	let data = {};
+	let data = {'api_key': api_key};
 	for (let name of ['educational', 'olympiads', 'contest', 'research', 'elective', 'additional_education_out', 'additional_education_in',
 		'sport', 'other_olympiads', 'events_in', 'events_out', 'sport_out', 'creativity_out', 'cls', 'fio']) data[name] = '';
 	return data;
@@ -53,9 +54,11 @@ function parseStudent(href, step = 0) {
 			++query_get;
 			return;
 		}
-		let title = div.getElementsByClassName("page-title")[0].textContent.split(' ');
+		let title = div.getElementsByClassName("page-title")[0].textContent.trim().replace(':', '').split(' ');
 		let tables = div.getElementsByClassName("ej-accordion");
 		let data = dataForSend();
+		let href_split = href.href.split('.');
+		data['student_id'] = parseInt(href_split[href_split.length - 1].split('/')[0]);
 		data['cls'] = title[1];
 		data['fio'] = title[title.length - 3] + " " + title[title.length - 2] + " " + title[title.length - 1];
 		for (let table of tables) {
@@ -135,7 +138,8 @@ window.onload = function() {
 		$.ajax({
 			url: server + "start",
 			type: 'POST',
-			dataType: "json"
+			dataType: "json",
+			data: {'api_key': api_key}
 		}).done(function (msg) {
 			parseClassList();
 		});
@@ -150,29 +154,21 @@ window.onload = function() {
 			if (query_send - query_get === 0 && classes_need_parse === 0){
 				clearInterval(timerId);
 
-				let request = new XMLHttpRequest(), fileName = "log.xlsx";
-				request.open('POST', server + "end", true);
-				request.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded; charset=UTF-8');
-				request.responseType = 'blob';
-
-				request.onload = function(e) {
-					if (this.status === 200) {
-						let blob = this.response;
-						if(window.navigator.msSaveOrOpenBlob) {
-							window.navigator.msSaveBlob(blob, fileName);
-						}
-						else{
-							let downloadLink = window.document.createElement('a');
-							let contentTypeHeader = request.getResponseHeader("Content-Type");
-							downloadLink.href = window.URL.createObjectURL(new Blob([blob], { type: contentTypeHeader }));
-							downloadLink.download = fileName;
-							document.body.appendChild(downloadLink);
-							downloadLink.click();
-							document.body.removeChild(downloadLink);
-						}
+				$.ajax({
+					url: server + "end",
+					type: 'POST',
+					xhrFields: {
+						'responseType': 'blob'
+					},
+					data: {'api_key': api_key},
+					success: function(data, status, xhr) {
+						let link = document.createElement('a'), date = new Date();
+						let filename = 'Достижения ' + date.toLocaleDateString() + ' ' + date.toLocaleTimeString() + '.xlsx';
+						link.href = URL.createObjectURL(data);
+						link.download = filename;
+						link.click();
 					}
-				};
-				request.send();
+				});
 			}
 		}, 1000);
 
